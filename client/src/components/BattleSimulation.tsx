@@ -339,18 +339,18 @@ const BattleSimulation: React.FC<BattleSimulationProps> = ({
       }, 2000);
     }, 1000);
   };
-  
+
   // 跳过战斗
   const skipBattle = () => {
     // 立即结束战斗
     handleBattleEnd();
   };
-  
+
   // 添加战斗日志
   const addBattleLog = (text: string) => {
     setBattleLogs(prev => [...prev, { text, timestamp: Date.now() }]);
   };
-  
+
   // 渲染战斗日志
   const renderBattleLogs = () => {
     return (
@@ -362,7 +362,8 @@ const BattleSimulation: React.FC<BattleSimulationProps> = ({
         ))}
       </BattleLog>
     );
-  };
+    };
+
   
   // 渲染随从
   const renderMinion = (minion: MinionCardType & { maxHealth?: number, isDead?: boolean }, index: number, side: 'player' | 'opponent') => {
@@ -387,6 +388,7 @@ const BattleSimulation: React.FC<BattleSimulationProps> = ({
       </MinionCard>
     );
   };
+
   
   // 渲染伤害数字
   const renderDamageNumbers = () => {
@@ -400,8 +402,7 @@ const BattleSimulation: React.FC<BattleSimulationProps> = ({
       </DamageNumber>
     ));
   };
-  
-  // 渲染攻击线
+
   const renderAttackLines = () => {
     return attackLines.map((line, index) => (
       <AttackLine 
@@ -413,7 +414,290 @@ const BattleSimulation: React.FC<BattleSimulationProps> = ({
       />
     ));
   };
-  
+
+  // 开始战斗回合
+  const startBattleRound = () => {
+    setTurnCount(prev => prev + 1);
+
+    // 检查是否有任一方的随从全部阵亡
+    const alivePlayers = playerMinions.filter(m => !m.isDead && m.health > 0);
+    const aliveOpponents = opponentMinions.filter(m => !m.isDead && m.health > 0);
+
+    if (alivePlayers.length === 0 || aliveOpponents.length === 0) {
+      handleBattleEnd();
+      return;
+    }
+
+    // 根据回合数决定谁先攻击
+    const isPlayerTurn = turnCount % 2 === 1;
+    
+    if (isPlayerTurn) {
+      // 玩家回合
+      const attackerIndex = Math.floor(Math.random() * alivePlayers.length);
+      const defenderIndex = Math.floor(Math.random() * aliveOpponents.length);
+      
+      setCurrentAttacker({ side: 'player', index: attackerIndex });
+      setCurrentDefender({ side: 'opponent', index: defenderIndex });
+      
+      setTimeout(() => {
+        performAttack(
+          'player',
+          'opponent',
+          alivePlayers[attackerIndex],
+          aliveOpponents[defenderIndex],
+          attackerIndex,
+          defenderIndex,
+          { x: 100 + attackerIndex * 80, y: 300 },
+          { x: 100 + defenderIndex * 80, y: 100 },
+          true
+        );
+        
+        // 检查对手随从是否存活并反击
+        setTimeout(() => {
+          if (aliveOpponents[defenderIndex].health > 0) {
+            setCurrentAttacker({ side: 'opponent', index: defenderIndex });
+            setCurrentDefender({ side: 'player', index: attackerIndex });
+            
+            performAttack(
+              'opponent',
+              'player',
+              aliveOpponents[defenderIndex],
+              alivePlayers[attackerIndex],
+              defenderIndex,
+              attackerIndex,
+              { x: 100 + defenderIndex * 80, y: 100 },
+              { x: 100 + attackerIndex * 80, y: 300 },
+              false
+            );
+          }
+          
+          // 清除状态并进入下一回合
+          setTimeout(() => {
+            setCurrentAttacker(null);
+            setCurrentDefender(null);
+            setDamageNumbers([]);
+            setAttackLines([]);
+            setTimeout(() => startBattleRound(), 500);
+          }, 1000);
+        }, 1000);
+      }, 1000);
+    } else {
+      // 对手回合
+      const attackerIndex = Math.floor(Math.random() * aliveOpponents.length);
+      const defenderIndex = Math.floor(Math.random() * alivePlayers.length);
+      
+      setCurrentAttacker({ side: 'opponent', index: attackerIndex });
+      setCurrentDefender({ side: 'player', index: defenderIndex });
+      
+      setTimeout(() => {
+        performAttack(
+          'opponent',
+          'player',
+          aliveOpponents[attackerIndex],
+          alivePlayers[defenderIndex],
+          attackerIndex,
+          defenderIndex,
+          { x: 100 + attackerIndex * 80, y: 100 },
+          { x: 100 + defenderIndex * 80, y: 300 },
+          false
+        );
+        
+        // 检查玩家随从是否存活并反击
+        setTimeout(() => {
+          if (alivePlayers[defenderIndex].health > 0) {
+            setCurrentAttacker({ side: 'player', index: defenderIndex });
+            setCurrentDefender({ side: 'opponent', index: attackerIndex });
+            
+            performAttack(
+              'player',
+              'opponent',
+              alivePlayers[defenderIndex],
+              aliveOpponents[attackerIndex],
+              defenderIndex,
+              attackerIndex,
+              { x: 100 + defenderIndex * 80, y: 300 },
+              { x: 100 + attackerIndex * 80, y: 100 },
+              true
+            );
+          }
+          
+          // 清除状态并进入下一回合
+          setTimeout(() => {
+            setCurrentAttacker(null);
+            setCurrentDefender(null);
+            setDamageNumbers([]);
+            setAttackLines([]);
+            setTimeout(() => startBattleRound(), 500);
+          }, 1000);
+        }, 1000);
+      }, 1000);
+    }
+  };
+
+  // 执行攻击
+  const performAttack = (attackerSide: 'player' | 'opponent', defenderSide: 'player' | 'opponent', attacker: any, defender: any, attackerIndexInOriginalArray: number, defenderIndexInOriginalArray: number, attackerPos: { x: number, y: number }, defenderPos: { x: number, y: number }, playerTurn: boolean) => {
+    // 执行攻击
+    const updatedPlayerMinions = [...playerMinions];
+    const updatedOpponentMinions = [...opponentMinions];
+    
+    // 添加攻击线动画
+    setAttackLines([{
+      fromX: attackerPos.x,
+      fromY: attackerPos.y,
+      toX: defenderPos.x,
+      toY: defenderPos.y
+    }]);
+    
+    // 计算伤害，考虑随从等级加成
+    const damage = Math.max(1, attacker.attack + Math.floor(attacker.tier / 2));
+    
+    if (defenderSide === 'player') {
+      const targetMinion = updatedPlayerMinions[defenderIndexInOriginalArray];
+      targetMinion.health -= damage;
+      
+      // 添加伤害数字动画
+      setDamageNumbers(prev => [
+        ...prev,
+        { 
+          x: defenderPos.x, 
+          y: defenderPos.y, 
+          amount: damage, 
+          isDamage: true 
+        }
+      ]);
+      
+      // 添加战斗日志
+      const attackerTitle = attackerSide === 'player' ? '你的' : '对手的';
+      const defenderTitle = '你的';
+      addBattleLog(`${attackerTitle}${attacker.name}(${attacker.tier}★) 攻击了 ${defenderTitle}${defender.name}(${defender.tier}★)，造成 ${damage} 点伤害！`);
+      
+      // 检查是否死亡
+      if (targetMinion.health <= 0) {
+        targetMinion.isDead = true;
+        targetMinion.health = 0;
+        addBattleLog(`${defenderTitle}${defender.name} 被击败了！`);
+      }
+      
+      // 更新状态
+      setPlayerMinions(updatedPlayerMinions);
+    } else {
+      const targetMinion = updatedOpponentMinions[defenderIndexInOriginalArray];
+      targetMinion.health -= damage;
+      
+      // 添加伤害数字动画
+      setDamageNumbers(prev => [
+        ...prev,
+        { 
+          x: defenderPos.x, 
+          y: defenderPos.y, 
+          amount: damage, 
+          isDamage: true 
+        }
+      ]);
+      
+      // 添加战斗日志
+      const attackerTitle = attackerSide === 'player' ? '你的' : '对手的';
+      const defenderTitle = '对手的';
+      addBattleLog(`${attackerTitle}${attacker.name}(${attacker.tier}★) 攻击了 ${defenderTitle}${defender.name}(${defender.tier}★)，造成 ${damage} 点伤害！`);
+      
+      // 检查是否死亡
+      if (targetMinion.health <= 0) {
+        targetMinion.isDead = true;
+        targetMinion.health = 0;
+        addBattleLog(`${defenderTitle}${defender.name} 被击败了！`);
+      }
+      
+      // 更新状态
+      setOpponentMinions(updatedOpponentMinions);
+    }
+  };
+    
+    // 反击伤害
+    if (attackerSide === 'player') {
+      // 计算反击伤害
+      const counterDamage = Math.max(1, defender.attack);
+      updatedPlayerMinions[attackerIndexInOriginalArray].health -= counterDamage;
+      
+      // 添加伤害数字动画
+      setDamageNumbers(prev => [
+        ...prev,
+        { 
+          x: attackerPos.x, 
+          y: attackerPos.y, 
+          amount: counterDamage, 
+          isDamage: true 
+        }
+      ]);
+      
+      // 添加战斗日志
+      if (counterDamage > 0) {
+        addBattleLog(`${attacker.name} 受到了 ${counterDamage} 点反击伤害！`);
+      }
+    } else {
+      // 计算反击伤害
+      const counterDamage = Math.max(1, defender.attack);
+      updatedOpponentMinions[attackerIndexInOriginalArray].health -= counterDamage;
+      
+      // 添加伤害数字动画
+      setDamageNumbers(prev => [
+        ...prev,
+        { 
+          x: attackerPos.x, 
+          y: attackerPos.y, 
+          amount: counterDamage, 
+          isDamage: true 
+        }
+      ]);
+      
+      // 添加战斗日志
+      if (counterDamage > 0) {
+        addBattleLog(`${attacker.name} 受到了 ${counterDamage} 点反击伤害！`);
+      }
+    }
+    
+    // 检查是否有随从死亡
+    updatedPlayerMinions.forEach(minion => {
+      if (minion.health <= 0 && !minion.isDead) {
+        minion.isDead = true;
+        addBattleLog(`${minion.name} 被击败了！`);
+      }
+    });
+    
+    updatedOpponentMinions.forEach(minion => {
+      if (minion.health <= 0 && !minion.isDead) {
+        minion.isDead = true;
+        addBattleLog(`${minion.name} 被击败了！`);
+      }
+    });
+    
+    // 更新随从状态
+    setPlayerMinions(updatedPlayerMinions);
+    setOpponentMinions(updatedOpponentMinions);
+    
+    // 清除当前攻击者和防御者
+    setTimeout(() => {
+      setCurrentAttacker(null);
+      setCurrentDefender(null);
+      
+      // 清除伤害数字
+      setTimeout(() => {
+        setDamageNumbers([]);
+        
+        // 检查战斗是否应该结束
+        const stillAlivePlayer = updatedPlayerMinions.filter(m => !m.isDead && m.health > 0);
+        const stillAliveOpponent = updatedOpponentMinions.filter(m => !m.isDead && m.health > 0);
+        
+        if (stillAlivePlayer.length === 0 || stillAliveOpponent.length === 0) {
+          // 战斗结束
+          handleBattleEnd();
+        } else {
+          // 继续下一轮战斗
+          setTimeout(() => simulateBattle(!playerTurn), 500);
+        }
+      }, 1000);
+    }, 800);
+
+
   // 开始战斗回合
   const startBattleRound = () => {
     // 随机决定先手
@@ -423,47 +707,7 @@ const BattleSimulation: React.FC<BattleSimulationProps> = ({
     // 开始战斗循环
     setTurnCount(0);
     simulateBattle(playerFirst);
-  };
-  
-  // 渲染组件
-  return (
-    <BattleContainer>
-      <BattleTitle>第 {round} 回合战斗</BattleTitle>
-      
-      <BattleArea>
-        <BoardSide>
-          {opponentMinions.map((minion, index) => renderMinion(minion, index, 'opponent'))}
-        </BoardSide>
-        
-        <BoardSide>
-          {playerMinions.map((minion, index) => renderMinion(minion, index, 'player'))}
-        </BoardSide>
-      </BattleArea>
-      
-      {renderBattleLogs()}
-      
-      {/* 渲染攻击线和伤害数字 */}
-      {renderAttackLines()}
-      {renderDamageNumbers()}
-      
-      {/* 跳过按钮 */}
-      {!battleEnded && (
-        <SkipButton onClick={skipBattle}>跳过战斗</SkipButton>
-      )}
-      
-      {/* 战斗结果显示 */}
-      {showResult && (
-        <BattleResultDisplay>
-          <h3>战斗结束</h3>
-          <p>
-            {battleResult.result === 'win' && `你赢了！造成 ${battleResult.damage} 点伤害`}
-            {battleResult.result === 'loss' && `你输了！受到 ${battleResult.damage} 点伤害`}
-            {battleResult.result === 'tie' && '战斗平局！'}
-          </p>
-        </BattleResultDisplay>
-      )}
-    </BattleContainer>
-  );
+
   
   // 模拟战斗
   const simulateBattle = (playerTurn: boolean) => {
@@ -586,6 +830,64 @@ const BattleSimulation: React.FC<BattleSimulationProps> = ({
     // 记录位置信息用于伤害显示
     const attackerPos = { x: attackerX, y: attackerY };
     const defenderPos = { x: defenderX, y: defenderY };
+    
+    // 延迟一段时间后执行攻击
+    setTimeout(() => {
+      performAttack(
+        attackerSide,
+        defenderSide,
+        attacker,
+        defender,
+        attackerIndexInOriginalArray,
+        defenderIndexInOriginalArray,
+        { x: attackerX, y: attackerY },
+        { x: defenderX, y: defenderY },
+        playerTurn
+      );
+    }, 1000);
+
+
+
+  // 渲染组件
+  return (
+    <BattleContainer>
+      <BattleTitle>第 {round} 回合战斗</BattleTitle>
+      
+      <BattleArea>
+        <BoardSide>
+          {opponentMinions.map((minion, index) => 
+            renderMinion(minion, index, 'opponent')
+          )}
+          {renderDamageNumbers()}
+          {renderAttackLines()}
+        </BoardSide>
+        
+        <BoardSide>
+          {playerMinions.map((minion, index) => 
+            renderMinion(minion, index, 'player')
+          )}
+        </BoardSide>
+      </BattleArea>
+      
+      {renderBattleLogs()}
+      
+      {!battleEnded && (
+        <SkipButton onClick={skipBattle}>跳过战斗</SkipButton>
+      )}
+      
+      {showResult && (
+        <BattleResultDisplay>
+          {battleResult.result === 'win' && '战斗胜利！'}
+          {battleResult.result === 'loss' && '战斗失败！'}
+          {battleResult.result === 'tie' && '战斗平局！'}
+          {battleResult.result !== 'tie' && `造成 ${battleResult.damage} 点伤害`}
+        </BattleResultDisplay>
+      )}
+    </BattleContainer>
+  );
+    
+    // 设置攻击线
+    setAttackLines([{ fromX: attackerX, fromY: attackerY, toX: defenderX, toY: defenderY }]);
     
     // 执行攻击逻辑
     const performAttack = () => {
@@ -723,7 +1025,19 @@ const BattleSimulation: React.FC<BattleSimulationProps> = ({
           }
         }, 1000);
       }, 800);
-    };
+  
     
     // 延迟一段时间后执行攻击
-    setTimeout(performAttack, 1000);
+    setTimeout(() => {
+      performAttack(
+        attackerSide,
+        defenderSide,
+        attacker,
+        defender,
+        attackerIndexInOriginalArray,
+        defenderIndexInOriginalArray,
+        { x: attackerX, y: attackerY },
+        { x: defenderX, y: defenderY },
+        playerTurn
+      );
+    }, 1000);
